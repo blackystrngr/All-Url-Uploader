@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 import threading
 import os
 import asyncio
@@ -13,48 +13,30 @@ bot_instance = None
 bot_running = False
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-@app.route("/")
+@app.route("/", methods=['GET', 'HEAD', 'POST'])
 def hello_world():
+    """Handle all HTTP methods for health checks"""
     return f"Telegram Bot is Running! Status: {'Active' if bot_running else 'Starting...'}"
 
-@app.route("/health")
+@app.route("/health", methods=['GET', 'HEAD', 'POST'])
 def health_check():
+    """Health check endpoint for monitoring"""
     return {"status": "healthy", "bot_running": bot_running}
 
-@app.route("/restart")
-def restart_bot():
-    """Emergency restart endpoint"""
-    global bot_running
-    if bot_instance:
-        try:
-            asyncio.create_task(restart_bot_async())
-            return {"status": "restarting"}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
-    return {"status": "no_bot_instance"}
+@app.route("/webhook", methods=['POST'])
+def webhook():
+    """Webhook endpoint for future use"""
+    return {"status": "webhook_received"}
 
-async def restart_bot_async():
-    global bot_instance, bot_running
-    if bot_instance:
-        await bot_instance.stop()
-        bot_running = False
-        await asyncio.sleep(2)
-        await bot_instance.start()
-        bot_running = True
-
-def run_bot_sync():
-    """Run the bot synchronously in a separate thread"""
+async def start_bot():
+    """Start the bot asynchronously"""
     global bot_instance, bot_running
     
     try:
-        # Create new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
         # Initialize bot
         if not os.path.isdir(Config.DOWNLOAD_LOCATION):
             os.makedirs(Config.DOWNLOAD_LOCATION)
@@ -71,21 +53,52 @@ def run_bot_sync():
         logger.info("Starting Telegram bot...")
         
         # Start bot
-        loop.run_until_complete(bot_instance.start())
+        await bot_instance.start()
         bot_running = True
         logger.info("Bot started successfully!")
         
         # Keep the bot running
-        loop.run_forever()
+        await bot_instance.idle()
+        
+    except Exception as e:
+        logger.error(f"Error starting bot: {e}")
+        bot_running = False
+    finally:
+        if bot_instance:
+            await bot_instance.stop()
+            bot_running = False
+
+def run_bot_sync():
+    """Run the bot synchronously in a separate thread"""
+    try:
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Run the bot
+        loop.run_until_complete(start_bot())
         
     except Exception as e:
         logger.error(f"Error in bot thread: {e}")
+        global bot_running
         bot_running = False
 
+# Validate required environment variables
+def validate_config():
+    if not Config.BOT_TOKEN:
+        logger.error("BOT_TOKEN is not set!")
+        return False
+    if not Config.API_ID:
+        logger.error("API_ID is not set!")
+        return False
+    if not Config.API_HASH:
+        logger.error("API_HASH is not set!")
+        return False
+    return True
+
 if __name__ == "__main__":
-    # Validate required environment variables
-    if not all([Config.BOT_TOKEN, Config.API_ID, Config.API_HASH]):
-        logger.error("Missing required environment variables!")
+    # Validate configuration
+    if not validate_config():
         exit(1)
     
     # Start bot in separate thread
@@ -94,7 +107,7 @@ if __name__ == "__main__":
     
     # Give bot time to start
     import time
-    time.sleep(3)
+    time.sleep(5)
     
     # Start Flask app
     port = int(os.environ.get("PORT", 5000))
