@@ -18,20 +18,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logging.getLogger("pyrogram").setLevel(logging.WARNING)
 
-def detect_file_type_from_url(url):
-    """Detect file type from URL extension"""
-    filename = url.split('/')[-1].split('?')[0]  # Remove query parameters
-    ext = filename.lower().split('.')[-1] if '.' in filename else ''
-    
-    video_extensions = ['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', 'ogv']
-    audio_extensions = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus']
-    
-    if ext in video_extensions:
-        return 'video'
-    elif ext in audio_extensions:
-        return 'audio'
-    else:
-        return 'file'  # Default to file/document
 
 @Client.on_message(filters.private & filters.regex(pattern=".*http.*"))
 async def echo(bot, update):
@@ -41,7 +27,7 @@ async def echo(bot, update):
     youtube_dl_password = None
     file_name = None
 
-    if "youtu.be" in url or "youtube.com" in url:
+    if "youtu.be" in url:
         return await update.reply_text(
             "**Choose Download type**",
             reply_markup=InlineKeyboardMarkup(
@@ -77,6 +63,7 @@ async def echo(bot, update):
             url = url.strip()
         if file_name is not None:
             file_name = file_name.strip()
+        # https://stackoverflow.com/a/761825/4723940
         if youtube_dl_username is not None:
             youtube_dl_username = youtube_dl_username.strip()
         if youtube_dl_password is not None:
@@ -91,7 +78,6 @@ async def echo(bot, update):
                 o = entity.offset
                 length = entity.length
                 url = url[o: o + length]
-
     if Config.HTTP_PROXY != "":
         command_to_exec = [
             "yt-dlp",
@@ -104,23 +90,21 @@ async def echo(bot, update):
         ]
     else:
         command_to_exec = ["yt-dlp", "--no-warnings", "--allow-dynamic-mpd", "-j", url]
-    
     if youtube_dl_username is not None:
         command_to_exec.append("--username")
         command_to_exec.append(youtube_dl_username)
     if youtube_dl_password is not None:
         command_to_exec.append("--password")
         command_to_exec.append(youtube_dl_password)
-    
     logger.info(command_to_exec)
     chk = await bot.send_message(
         chat_id=update.chat.id,
-        text="Processing your request ⌛",
+        text="Proccesing your ⌛",
         disable_web_page_preview=True,
         reply_to_message_id=update.id,
     )
-
     if update.from_user.id not in Config.AUTH_USERS:
+
         if str(update.from_user.id) in Config.ADL_BOT_RQ:
             current_time = time.time()
             previous_time = Config.ADL_BOT_RQ[str(update.from_user.id)]
@@ -144,15 +128,19 @@ async def echo(bot, update):
 
     process = await asyncio.create_subprocess_exec(
         *command_to_exec,
+        # stdout must a pipe to be accessible as process.stdout
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
+    # Wait for the subprocess to finish
     stdout, stderr = await process.communicate()
     e_response = stderr.decode().strip()
     logger.info(e_response)
     t_response = stdout.decode().strip()
-
+    # logger.info(t_response)
+    # https://github.com/rg3/youtube-dl/issues/2630#issuecomment-38635239
     if e_response and "nonnumeric port" not in e_response:
+        # logger.warn("Status : FAIL", exc.returncode, exc.output)
         error_message = e_response.replace(
             """
             please report this issue on https://yt-dl.org/bug . Make sure you are using the latest version;
@@ -172,8 +160,8 @@ async def echo(bot, update):
             disable_web_page_preview=True,
         )
         return False
-
     if t_response:
+        # logger.info(t_response)
         x_reponse = t_response
         if "\n" in x_reponse:
             x_reponse, _ = x_reponse.split("\n")
@@ -188,7 +176,7 @@ async def echo(bot, update):
         )
         with open(save_ytdl_json_path, "w", encoding="utf8") as outfile:
             json.dump(response_json, outfile, ensure_ascii=False)
-
+        # logger.info(response_json)
         inline_keyboard = []
         duration = None
         if "duration" in response_json:
@@ -228,6 +216,7 @@ async def echo(bot, update):
                         )
                     ]
                 else:
+                    # special weird case :\
                     ikeyboard = [
                         InlineKeyboardButton(
                             "🎬 [" + "] ( " + humanbytes(size) + " )",
@@ -263,34 +252,21 @@ async def echo(bot, update):
                     [InlineKeyboardButton("⛔ ᴄʟᴏsᴇ", callback_data="close")]
                 )
         else:
-            # For direct links without yt-dlp metadata
-            format_id = response_json.get("format_id", "direct")
-            format_ext = response_json.get("ext", "unknown")
-            
-            # Detect file type from URL
-            detected_type = detect_file_type_from_url(url)
-            
+            format_id = response_json["format_id"]
+            format_ext = response_json["ext"]
+            cb_string_file = "{}|{}|{}|{}".format("file", format_id, format_ext, randem)
+            cb_string_video = "{}|{}|{}|{}".format(
+                "video", format_id, format_ext, randem
+            )
+            inline_keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🎬 Video", callback_data=(cb_string_video).encode("UTF-8")
+                    )
+                ]
+            )
             cb_string_file = "{}={}={}".format("file", format_id, format_ext)
-            cb_string_video = "{}={}={}".format(detected_type, format_id, format_ext)
-            
-            if detected_type == "video":
-                inline_keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            "🎬 Video", callback_data=(cb_string_video).encode("UTF-8")
-                        )
-                    ]
-                )
-            elif detected_type == "audio":
-                inline_keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            "🎵 Audio", callback_data=(cb_string_video).encode("UTF-8")
-                        )
-                    ]
-                )
-            
-            # Always provide document option
+            cb_string_video = "{}={}={}".format("video", format_id, format_ext)
             inline_keyboard.append(
                 [
                     InlineKeyboardButton(
@@ -298,7 +274,6 @@ async def echo(bot, update):
                     )
                 ]
             )
-            
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
         await chk.delete()
 
@@ -311,47 +286,23 @@ async def echo(bot, update):
             reply_to_message_id=update.id,
         )
     else:
-        # Fallback for direct links that don't work with yt-dlp
+        # fallback for nonnumeric port a.k.a seedbox.io
         inline_keyboard = []
-        
-        # Detect file type from URL
-        detected_type = detect_file_type_from_url(url)
-        
-        cb_string_file = "{}={}={}".format("file", "direct", "bin")
-        cb_string_media = "{}={}={}".format(detected_type, "direct", "bin")
-        
-        if detected_type == "video":
-            inline_keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🎬 Video", callback_data=(cb_string_media).encode("UTF-8")
-                    )
-                ]
-            )
-        elif detected_type == "audio":
-            inline_keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🎵 Audio", callback_data=(cb_string_media).encode("UTF-8")
-                    )
-                ]
-            )
-        
-        # Always provide document option for direct links
+        cb_string_file = "{}={}={}".format("file", "LFO", "NONE")
+        cb_string_video = "{}={}={}".format("video", "OFL", "ENON")
         inline_keyboard.append(
             [
                 InlineKeyboardButton(
-                    "📁 Document", callback_data=(cb_string_file).encode("UTF-8")
+                    "🎬 ᴍᴇᴅɪᴀ", callback_data=(cb_string_video).encode("UTF-8")
                 )
             ]
         )
-        
         reply_markup = InlineKeyboardMarkup(inline_keyboard)
         await chk.delete(True)
 
         await bot.send_message(
             chat_id=update.chat.id,
-            text="Choose download format:",
+            text=Translation.FORMAT_SELECTION,
             reply_markup=reply_markup,
             reply_to_message_id=update.id,
         )
