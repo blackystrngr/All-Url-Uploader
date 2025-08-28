@@ -3,6 +3,8 @@ import threading
 import os
 import asyncio
 import logging
+import signal
+import sys
 from pyrogram import Client
 from config import Config
 
@@ -11,6 +13,7 @@ app = Flask(__name__)
 # Global bot instance
 bot_instance = None
 bot_running = False
+stop_event = threading.Event()
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -57,15 +60,22 @@ async def start_bot():
         bot_running = True
         logger.info("Bot started successfully!")
         
-        # Keep the bot running
-        await bot_instance.idle()
+        # Keep the bot running until stop_event is set
+        while not stop_event.is_set():
+            await asyncio.sleep(1)
+        
+        logger.info("Stopping bot...")
         
     except Exception as e:
         logger.error(f"Error starting bot: {e}")
         bot_running = False
     finally:
         if bot_instance:
-            await bot_instance.stop()
+            try:
+                await bot_instance.stop()
+                logger.info("Bot stopped successfully")
+            except Exception as e:
+                logger.error(f"Error stopping bot: {e}")
             bot_running = False
 
 def run_bot_sync():
@@ -83,6 +93,12 @@ def run_bot_sync():
         global bot_running
         bot_running = False
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"Received signal {signum}")
+    stop_event.set()
+    sys.exit(0)
+
 # Validate required environment variables
 def validate_config():
     if not Config.BOT_TOKEN:
@@ -97,6 +113,10 @@ def validate_config():
     return True
 
 if __name__ == "__main__":
+    # Set up signal handlers
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     # Validate configuration
     if not validate_config():
         exit(1)
