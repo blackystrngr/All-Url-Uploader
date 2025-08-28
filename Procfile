@@ -1,1 +1,1 @@
-web: gunicorn app:app & python3 bot.py
+web: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 0 app:app
