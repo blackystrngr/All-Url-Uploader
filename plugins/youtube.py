@@ -1,7 +1,10 @@
+# Updated plugins/youtube.py - Replace the entire file content
+
 import os
 import asyncio
 
-from youtube_dl import YoutubeDL
+# Use yt-dlp instead of youtube_dl
+from yt_dlp import YoutubeDL
 from pyrogram import enums
 from pyrogram.types import Message
 from pyrogram import Client, filters
@@ -36,7 +39,7 @@ async def callback_query_ytdl_audio(_, callback_query):
             await message.reply_chat_action(enums.ChatAction.CANCEL)
             await message.delete()
     except Exception as e:
-        await message.reply_text(e)
+        await message.reply_text(str(e))
     await callback_query.message.reply_to_message.delete()
     await callback_query.message.delete()
 
@@ -121,6 +124,6 @@ async def callback_query_ytdl_video(_, callback_query):
             await message.reply_chat_action(enums.ChatAction.CANCEL)
             await message.delete()
     except Exception as e:
-        await message.reply_text(e)
+        await message.reply_text(str(e))
     await callback_query.message.reply_to_message.delete()
     await callback_query.message.delete()
