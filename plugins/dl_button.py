@@ -21,28 +21,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logging.getLogger("pyrogram").setLevel(logging.WARNING)
 
-def get_file_type_from_extension(filename):
-    """Determine file type based on extension"""
-    ext = filename.lower().split('.')[-1] if '.' in filename else ''
-    
-    # Video extensions
-    video_extensions = ['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp', 'ogv']
-    # Audio extensions  
-    audio_extensions = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma', 'opus']
-    # Archive/Document extensions that should always be documents
-    document_extensions = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'pdf', 'doc', 'docx', 
-                         'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json', 'xml', 'bin',
-                         'deb', 'rpm', 'dmg', 'exe', 'msi', 'apk', 'jar', 'war']
-    
-    if ext in video_extensions:
-        return 'video'
-    elif ext in audio_extensions:
-        return 'audio'
-    elif ext in document_extensions:
-        return 'document'
-    else:
-        # For unknown extensions, default to document instead of video
-        return 'document'
 
 async def ddl_call_back(bot, update):
     cb_data = update.data
@@ -81,18 +59,8 @@ async def ddl_call_back(bot, update):
     if f".{youtube_dl_ext}" not in custom_file_name:
         custom_file_name += f".{youtube_dl_ext}"
 
-    # Detect actual file type from filename
-    actual_file_type = get_file_type_from_extension(custom_file_name)
-    
-    # Override tg_send_type if it's incorrectly set to video for non-video files
-    if tg_send_type == "video" and actual_file_type != "video":
-        logger.info(f"Correcting file type from {tg_send_type} to {actual_file_type} for {custom_file_name}")
-        tg_send_type = actual_file_type
-
-    logger.info(f"URL: {youtube_dl_url}")
-    logger.info(f"Filename: {custom_file_name}")
-    logger.info(f"Detected file type: {actual_file_type}")
-    logger.info(f"Send type: {tg_send_type}")
+    logger.info(youtube_dl_url)
+    logger.info(custom_file_name)
 
     start = datetime.now()
 
@@ -168,7 +136,6 @@ async def ddl_call_back(bot, update):
         else:
             start_time = time.time()
 
-            # Use the corrected file type for uploading
             if tg_send_type == "video":
                 width, height, duration = await Mdata01(download_directory)
                 await bot.send_video(
@@ -223,7 +190,7 @@ async def ddl_call_back(bot, update):
                     ),
                 )
 
-            else:  # Default to document for everything else
+            else:
                 await bot.send_document(
                     chat_id=update.message.chat.id,
                     document=download_directory,
@@ -261,7 +228,7 @@ async def ddl_call_back(bot, update):
             logger.info("Uploaded in: %s", str(time_taken_for_upload))
     else:
         await bot.edit_message_text(
-            text=Translation.NO_VOID_FORMAT_FOUND.format("File not found after download"),
+            text=Translation.NO_VOID_FORMAT_FOUND.format("Incorrect Link"),
             chat_id=update.message.chat.id,
             message_id=update.message.id,
             disable_web_page_preview=True,
@@ -273,8 +240,8 @@ async def download_coroutine(bot, session, url, file_name, chat_id, message_id, 
     display_message = ""
 
     async with session.get(url, timeout=Config.PROCESS_MAX_TIMEOUT) as response:
-        total_length = int(response.headers.get("Content-Length", 0))
-        content_type = response.headers.get("Content-Type", "")
+        total_length = int(response.headers["Content-Length"])
+        content_type = response.headers["Content-Type"]
 
         if "text" in content_type and total_length < 500:
             return await response.release()
@@ -292,21 +259,27 @@ async def download_coroutine(bot, session, url, file_name, chat_id, message_id, 
                 diff = now - start
 
                 if round(diff % 5.0) == 0 or downloaded == total_length:
-                    percentage = downloaded * 100 / total_length if total_length > 0 else 0
-                    speed = downloaded / diff if diff > 0 else 0
+                    percentage = downloaded * 100 / total_length
+                    speed = downloaded / diff
                     elapsed_time = round(diff) * 1000
                     time_to_completion = (
-                        round((total_length - downloaded) / speed) * 1000 if speed > 0 else 0
+                        round((total_length - downloaded) / speed) * 1000
                     )
                     estimated_total_time = elapsed_time + time_to_completion
 
                     try:
-                        current_message = f"""**Download Status**
-Percentage : {percentage:.1f}%
-URL: {url}
-File Size: {humanbytes(total_length)}
-Downloaded: {humanbytes(downloaded)}
-ETA: {TimeFormatter(estimated_total_time)}"""
+                        current_message = """**Download Status**
+Percentage : {}
+URL: {}
+File Size: {}
+Downloaded: {}
+ETA: {}""".format(
+                            percentage,
+                            url,
+                            humanbytes(total_length),
+                            humanbytes(downloaded),
+                            TimeFormatter(estimated_total_time),
+                        )
 
                         if current_message != display_message:
                             await bot.edit_message_text(
