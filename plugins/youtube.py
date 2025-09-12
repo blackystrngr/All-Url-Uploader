@@ -13,6 +13,8 @@ from config import Config
 from plugins.functions.help_ytdl import get_file_extension_from_url, get_resolution
 YTDL_REGEX = r"^((?:https?:)?\/\/)"
 
+# Path to cookies file
+COOKIES_FILE = "cookies.txt"  # You can also use Config.COOKIES_FILE if defined in config
 
 @Client.on_callback_query(filters.regex("^ytdl_audio$"))
 async def callback_query_ytdl_audio(_, callback_query):
@@ -23,6 +25,11 @@ async def callback_query_ytdl_audio(_, callback_query):
             "outtmpl": "%(title)s - %(extractor)s-%(id)s.%(ext)s",
             "writethumbnail": True,
         }
+        
+        # Add cookies if file exists
+        if os.path.exists(COOKIES_FILE):
+            ydl_opts["cookiefile"] = COOKIES_FILE
+            
         with YoutubeDL(ydl_opts) as ydl:
             message = callback_query.message
             await message.reply_chat_action(enums.ChatAction.TYPING)
@@ -108,6 +115,11 @@ async def callback_query_ytdl_video(_, callback_query):
             "outtmpl": "%(title)s - %(extractor)s-%(id)s.%(ext)s",
             "writethumbnail": True,
         }
+        
+        # Add cookies if file exists
+        if os.path.exists(COOKIES_FILE):
+            ydl_opts["cookiefile"] = COOKIES_FILE
+            
         with YoutubeDL(ydl_opts) as ydl:
             message = callback_query.message
             await message.reply_chat_action(enums.ChatAction.TYPING)
