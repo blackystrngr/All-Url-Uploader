@@ -16,7 +16,7 @@ class Config(object):
     # The Telegram API things
     API_ID = int(os.environ.get("API_ID", 0))
     API_HASH = os.environ.get("API_HASH")
-    
+    COOKIE_FILE = "cookies.txt"
     # File /video download location
     DOWNLOAD_LOCATION = "./DOWNLOADS"
     
