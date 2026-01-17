@@ -1,7 +1,7 @@
 import os
 import asyncio
 
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL  # Updated import for yt-dlp
 from pyrogram import enums
 from pyrogram.types import Message
 from pyrogram import Client, filters
@@ -99,6 +99,29 @@ async def callback_query_ytdl_video(_, callback_query):
         url = callback_query.message.reply_to_message.text
         ydl_opts = {
             "format": "best[ext=mp4]",
+            "outtmpl": "%(title)s - %(extractor)s-%(id)s.%(ext)s",
+            "writethumbnail": True,
+            'cookiefile': 'cookies.txt',  # Added for bypassing YouTube restrictions
+        }
+        with YoutubeDL(ydl_opts) as ydl:
+            message = callback_query.message
+            await message.reply_chat_action(enums.ChatAction.TYPING)
+            info_dict = ydl.extract_info(url, download=False)
+            # download
+            await callback_query.edit_message_text("**Downloading video...**")
+            ydl.process_info(info_dict)
+            # upload
+            video_file = ydl.prepare_filename(info_dict)
+            task = asyncio.create_task(send_video(message, info_dict, video_file))
+            while not task.done():
+                await asyncio.sleep(3)
+                await message.reply_chat_action(enums.ChatAction.UPLOAD_DOCUMENT)
+            await message.reply_chat_action(enums.ChatAction.CANCEL)
+            await message.delete()
+    except Exception as e:
+        await message.reply_text(e)
+    await callback_query.message.reply_to_message.delete()
+    await callback_query.message.delete()            "format": "best[ext=mp4]",
             "outtmpl": "%(title)s - %(extractor)s-%(id)s.%(ext)s",
             "writethumbnail": True,
             'cookiefile': 'cookies.txt',  # Added for bypassing YouTube restrictions
