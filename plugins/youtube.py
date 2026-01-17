@@ -1,7 +1,7 @@
 import os
 import asyncio
 
-from yt_dlp import YoutubeDL  # Updated import for yt-dlp
+from yt_dlp import YoutubeDL  # Use yt-dlp instead of youtube_dl
 from pyrogram import enums
 from pyrogram.types import Message
 from pyrogram import Client, filters
@@ -36,7 +36,7 @@ async def callback_query_ytdl_audio(_, callback_query):
             await message.reply_chat_action(enums.ChatAction.CANCEL)
             await message.delete()
     except Exception as e:
-        await message.reply_text(e)
+        await callback_query.message.reply_text(str(e))  # Use callback_query.message if message not defined
     await callback_query.message.reply_to_message.delete()
     await callback_query.message.delete()
 
@@ -51,10 +51,10 @@ async def send_audio(message: Message, info_dict, audio_file):
     download_location = f"{Config.DOWNLOAD_LOCATION}/{message.from_user.id}.jpg"
     thumb = download_location if os.path.isfile(download_location) else None
     webpage_url = info_dict["webpage_url"]
-    title = info_dict["title"] or ""
-    caption = f"""[{title}]({webpage_url})"""
-    duration = int(float(info_dict["duration"]))
-    performer = info_dict["uploader"] or ""
+    title = info_dict.get("title", "")
+    caption = f"[{title}]({webpage_url})"
+    duration = int(float(info_dict.get("duration", 0)))
+    performer = info_dict.get("uploader", "")
     await message.reply_audio(
         audio_file,
         caption=caption,
@@ -64,7 +64,6 @@ async def send_audio(message: Message, info_dict, audio_file):
         parse_mode=enums.ParseMode.HTML,
         thumb=thumb,
     )
-
     os.remove(audio_file)
     os.remove(thumbnail_file)
 
@@ -75,9 +74,9 @@ async def send_video(message: Message, info_dict, video_file):
     download_location = f"{Config.DOWNLOAD_LOCATION}/{message.from_user.id}.jpg"
     thumb = download_location if os.path.isfile(download_location) else None
     webpage_url = info_dict["webpage_url"]
-    title = info_dict["title"] or ""
-    caption = f"""[{title}]({webpage_url})"""
-    duration = int(float(info_dict["duration"]))
+    title = info_dict.get("title", "")
+    caption = f"[{title}]({webpage_url})"
+    duration = int(float(info_dict.get("duration", 0)))
     width, height = get_resolution(info_dict)
     await message.reply_video(
         video_file,
@@ -88,14 +87,12 @@ async def send_video(message: Message, info_dict, video_file):
         parse_mode=enums.ParseMode.HTML,
         thumb=thumb,
     )
-
     os.remove(video_file)
     os.remove(thumbnail_file)
 
 @Client.on_callback_query(filters.regex("^ytdl_video$"))
 async def callback_query_ytdl_video(_, callback_query):
     try:
-        # url = callback_query.message.text
         url = callback_query.message.reply_to_message.text
         ydl_opts = {
             "format": "best[ext=mp4]",
@@ -119,29 +116,6 @@ async def callback_query_ytdl_video(_, callback_query):
             await message.reply_chat_action(enums.ChatAction.CANCEL)
             await message.delete()
     except Exception as e:
-        await message.reply_text(e)
-    await callback_query.message.reply_to_message.delete()
-    await callback_query.message.delete()            "format": "best[ext=mp4]",
-            "outtmpl": "%(title)s - %(extractor)s-%(id)s.%(ext)s",
-            "writethumbnail": True,
-            'cookiefile': 'cookies.txt',  # Added for bypassing YouTube restrictions
-        }
-        with YoutubeDL(ydl_opts) as ydl:
-            message = callback_query.message
-            await message.reply_chat_action(enums.ChatAction.TYPING)
-            info_dict = ydl.extract_info(url, download=False)
-            # download
-            await callback_query.edit_message_text("**Downloading video...**")
-            ydl.process_info(info_dict)
-            # upload
-            video_file = ydl.prepare_filename(info_dict)
-            task = asyncio.create_task(send_video(message, info_dict, video_file))
-            while not task.done():
-                await asyncio.sleep(3)
-                await message.reply_chat_action(enums.ChatAction.UPLOAD_DOCUMENT)
-            await message.reply_chat_action(enums.ChatAction.CANCEL)
-            await message.delete()
-    except Exception as e:
-        await message.reply_text(e)
+        await callback_query.message.reply_text(str(e))  # Use callback_query.message if message not defined
     await callback_query.message.reply_to_message.delete()
     await callback_query.message.delete()
