@@ -52,11 +52,7 @@ async def send_audio(message: Message, info_dict, audio_file):
     thumb = download_location if os.path.isfile(download_location) else None
     webpage_url = info_dict["webpage_url"]
     title = info_dict["title"] or ""
-    caption = f'
-
-[{title}]({webpage_url})
-
-'
+    caption = f"""[{title}]({webpage_url})"""
     duration = int(float(info_dict["duration"]))
     performer = info_dict["uploader"] or ""
     await message.reply_audio(
@@ -80,11 +76,7 @@ async def send_video(message: Message, info_dict, video_file):
     thumb = download_location if os.path.isfile(download_location) else None
     webpage_url = info_dict["webpage_url"]
     title = info_dict["title"] or ""
-    caption = f'
-
-[{title}]({webpage_url})
-
-'
+    caption = f"""[{title}]({webpage_url})"""
     duration = int(float(info_dict["duration"]))
     width, height = get_resolution(info_dict)
     await message.reply_video(
